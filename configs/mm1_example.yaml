@@ -1,0 +1,9 @@
+arrival:
+  arrival_rate: 5.0
+service:
+  service_rate: 8.0
+queue:
+  capacity: null
+  queue_discipline: FIFO
+simulation_time: 100.0
+random_seed: 42
