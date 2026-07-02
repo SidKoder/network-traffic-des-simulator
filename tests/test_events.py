@@ -2,6 +2,7 @@
 
 import pytest
 
+from events.event import Event
 from events.scheduler import EventScheduler
 from events.types import EventType
 
@@ -79,3 +80,59 @@ class TestEventScheduler:
         for event_type in EventType:
             scheduler.schedule(0.0, event_type)
         assert scheduler.pending_count == 4
+
+
+class TestEvent:
+    """Tests for the core simulation event model."""
+
+    def test_contains_action_context(self) -> None:
+        """An event records identity, packet, type, and metadata."""
+        event = Event(
+            timestamp=1.5,
+            event_type=EventType.PACKET_ARRIVAL,
+            packet_id=42,
+            metadata={"source": "generator"},
+        )
+
+        assert event.event_id
+        assert event.packet_id == 42
+        assert event.metadata == {"source": "generator"}
+
+    def test_compares_by_timestamp(self) -> None:
+        """Earlier timestamps compare before later timestamps."""
+        earlier = Event(1.0, EventType.PACKET_ARRIVAL)
+        later = Event(2.0, EventType.PACKET_ARRIVAL)
+
+        assert earlier < later
+        assert later > earlier
+
+    def test_sequence_breaks_timestamp_ties(self) -> None:
+        """Sequence is the only tie-breaker for equal timestamps."""
+        first = Event(
+            1.0,
+            EventType.PACKET_DEPARTURE,
+            packet_id=99,
+            sequence=3,
+        )
+        second = Event(
+            1.0,
+            EventType.PACKET_ARRIVAL,
+            packet_id=1,
+            sequence=4,
+        )
+
+        assert first < second
+
+    def test_scheduler_populates_new_event_fields(self) -> None:
+        """The scheduler propagates packet and metadata context."""
+        scheduler = EventScheduler()
+        event = scheduler.schedule(
+            1.0,
+            EventType.PACKET_ARRIVAL,
+            packet_id=7,
+            metadata={"queue": "primary"},
+        )
+
+        assert event.packet_id == 7
+        assert event.metadata == {"queue": "primary"}
+        assert event.payload is event.metadata
