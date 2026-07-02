@@ -5,7 +5,16 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from distributions.continuous import ExponentialDistribution
+from distributions.continuous import (
+    ExponentialDistribution,
+    GammaDistribution,
+    NormalDistribution,
+)
+from distributions.discrete import (
+    BernoulliDistribution,
+    GeometricDistribution,
+    WeightedDiscreteDistribution,
+)
 from validation import (
     DEFAULT_SUITE,
     ValidationResult,
@@ -18,6 +27,30 @@ from validation import (
     theoretical_variance,
     variance_relative_error,
 )
+
+# Sample size and tolerances mirror tests/test_distributions.py / conftest.py
+# so the framework's per-distribution tests stay numerically consistent with
+# the existing test suite.
+SAMPLE_SIZE = 50_000
+MEAN_RTOL = 0.05
+VAR_RTOL = 0.10
+
+
+def _assert_result_in_tolerance(
+    result: ValidationResult,
+    expected_mean: float,
+    expected_variance: float,
+) -> None:
+    """Assert a single ``ValidationResult`` matches closed-form moments."""
+    assert result.theoretical_mean == pytest.approx(expected_mean)
+    assert result.theoretical_variance == pytest.approx(expected_variance)
+    assert result.mean_relative_error < MEAN_RTOL, (
+        f"mean relative error {result.mean_relative_error:.4%} exceeds {MEAN_RTOL:.0%}"
+    )
+    assert result.variance_relative_error < VAR_RTOL, (
+        f"variance relative error {result.variance_relative_error:.4%} "
+        f"exceeds {VAR_RTOL:.0%}"
+    )
 
 
 class TestTheoreticalMetrics:
@@ -53,8 +86,85 @@ class TestTheoreticalMetrics:
         assert mean_relative_error(0.0, 1.0) == float("inf")
 
 
+class TestRunSuitePerDistribution:
+    """Per-distribution tests for the runner.
+
+    One test per distribution in :data:`validation.DEFAULT_SUITE`. Each
+    test pins the closed-form theoretical moments and confirms the
+    framework reports a sample mean and variance within the standard
+    tolerances. Failures point directly at a single distribution.
+    """
+
+    def test_exponential(self) -> None:
+        """ExponentialDistribution(rate=3.0) — mean 1/3, var 1/9."""
+        rate = 3.0
+        results = run_suite(
+            [ExponentialDistribution(rate=rate)],
+            sample_size=SAMPLE_SIZE,
+            seed=42,
+        )
+        _assert_result_in_tolerance(results[0], 1.0 / rate, 1.0 / (rate**2))
+
+    def test_normal(self) -> None:
+        """NormalDistribution(mean=10, std=2.5) — mean mu, var sigma^2."""
+        mu, sigma = 10.0, 2.5
+        results = run_suite(
+            [NormalDistribution(mean=mu, std=sigma)],
+            sample_size=SAMPLE_SIZE,
+            seed=42,
+        )
+        _assert_result_in_tolerance(results[0], mu, sigma**2)
+
+    def test_gamma(self) -> None:
+        """GammaDistribution(shape=2, scale=3) — mean k*theta, var k*theta^2."""
+        k, theta = 2.0, 3.0
+        results = run_suite(
+            [GammaDistribution(shape=k, scale=theta)],
+            sample_size=SAMPLE_SIZE,
+            seed=42,
+        )
+        _assert_result_in_tolerance(results[0], k * theta, k * theta**2)
+
+    def test_bernoulli(self) -> None:
+        """BernoulliDistribution(p=0.3) — mean p, var p(1-p)."""
+        p = 0.3
+        results = run_suite(
+            [BernoulliDistribution(probability=p)],
+            sample_size=SAMPLE_SIZE,
+            seed=42,
+        )
+        _assert_result_in_tolerance(results[0], p, p * (1.0 - p))
+
+    def test_geometric(self) -> None:
+        """GeometricDistribution(p=0.4) — mean 1/p, var (1-p)/p^2."""
+        p = 0.4
+        results = run_suite(
+            [GeometricDistribution(probability=p)],
+            sample_size=SAMPLE_SIZE,
+            seed=42,
+        )
+        _assert_result_in_tolerance(results[0], 1.0 / p, (1.0 - p) / (p**2))
+
+    def test_weighted_discrete(self) -> None:
+        """WeightedDiscrete over {1, 2, 5} with weights {1, 2, 1}.
+
+        Probabilities normalize to 1/4, 1/2, 1/4, giving:
+            mean   = 1*(1/4) + 2*(1/2) + 5*(1/4) = 2.5
+            var    = 1^2*(1/4) + 2^2*(1/2) + 5^2*(1/4) - mean^2
+                   = 0.25 + 2 + 6.25 - 6.25 = 2.25
+        """
+        values = [1.0, 2.0, 5.0]
+        weights = [1.0, 2.0, 1.0]
+        results = run_suite(
+            [WeightedDiscreteDistribution(values=values, weights=weights)],
+            sample_size=SAMPLE_SIZE,
+            seed=42,
+        )
+        _assert_result_in_tolerance(results[0], 2.5, 2.25)
+
+
 class TestRunSuite:
-    """Tests for the runner."""
+    """Tests for the runner's suite-level behavior."""
 
     def test_run_suite_returns_one_result_per_distribution(self) -> None:
         """The suite yields one ValidationResult per input distribution."""
@@ -62,17 +172,6 @@ class TestRunSuite:
         assert len(results) == len(DEFAULT_SUITE)
         assert all(isinstance(r, ValidationResult) for r in results)
         assert all(r.name for r in results)
-
-    def test_exponential_meets_tolerances(self) -> None:
-        """Exponential at rate=3.0 passes the standard 5% / 10% tolerances."""
-        dist = ExponentialDistribution(rate=3.0)
-        results = run_suite([dist], sample_size=50_000, seed=42)
-        assert len(results) == 1
-        r = results[0]
-        assert r.theoretical_mean == pytest.approx(1.0 / 3.0)
-        assert r.theoretical_variance == pytest.approx(1.0 / 9.0)
-        assert r.mean_relative_error < 0.05
-        assert r.variance_relative_error < 0.10
 
     def test_run_suite_is_reproducible_with_same_seed(self) -> None:
         """Two runs with the same seed produce identical results."""
