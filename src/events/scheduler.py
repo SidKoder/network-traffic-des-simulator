@@ -29,6 +29,23 @@ class EventScheduler:
         """
         return len(self._queue)
 
+    def add_event(self, event: Event) -> Event:
+        """Add an existing event to the queue in logarithmic time.
+
+        The scheduler assigns a monotonically increasing sequence number so
+        events with identical timestamps are removed in insertion order.
+
+        Parameters:
+            event: Future simulation event to enqueue.
+
+        Returns:
+            The enqueued event.
+        """
+        event.sequence = self._sequence_counter
+        self._sequence_counter += 1
+        heapq.heappush(self._queue, event)
+        return event
+
     def schedule(
         self,
         timestamp: float,
@@ -65,12 +82,17 @@ class EventScheduler:
         if event_id is not None:
             event_kwargs["event_id"] = event_id
 
-        event = Event(
-            **event_kwargs,
-        )
-        heapq.heappush(self._queue, event)
-        self._sequence_counter += 1
-        return event
+        return self.add_event(Event(**event_kwargs))
+
+    def remove_event(self) -> Event:
+        """Remove and return the earliest event in logarithmic time.
+
+        Raises:
+            IndexError: If no events are scheduled.
+        """
+        if self.is_empty():
+            raise IndexError("No events scheduled")
+        return heapq.heappop(self._queue)
 
     def next_event(self) -> Event:
         """Remove and return the earliest pending event.
@@ -81,9 +103,11 @@ class EventScheduler:
         Raises:
             IndexError: If no events are scheduled.
         """
-        if not self._queue:
-            raise IndexError("No events scheduled")
-        return heapq.heappop(self._queue)
+        return self.remove_event()
+
+    def view_next_event(self) -> Event | None:
+        """Return the earliest event without removing it in constant time."""
+        return self._queue[0] if self._queue else None
 
     def peek(self) -> Event | None:
         """Inspect the earliest pending event without removing it.
@@ -91,7 +115,15 @@ class EventScheduler:
         Returns:
             The next event, or None if the queue is empty.
         """
-        return self._queue[0] if self._queue else None
+        return self.view_next_event()
+
+    def is_empty(self) -> bool:
+        """Return whether the scheduler contains no pending events."""
+        return not self._queue
+
+    def queue_size(self) -> int:
+        """Return the current number of pending events."""
+        return len(self._queue)
 
     def clear(self) -> None:
         """Remove all scheduled events."""

@@ -81,6 +81,47 @@ class TestEventScheduler:
             scheduler.schedule(0.0, event_type)
         assert scheduler.pending_count == 4
 
+    def test_requested_timestamp_input(self) -> None:
+        """The requested timestamps leave the queue in chronological order."""
+        scheduler = EventScheduler()
+        timestamps = [1.2, 0.3, 2.8, 2.1]
+
+        for packet_id, timestamp in enumerate(timestamps):
+            scheduler.add_event(
+                Event(
+                    timestamp=timestamp,
+                    event_type=EventType.PACKET_ARRIVAL,
+                    packet_id=packet_id,
+                )
+            )
+
+        assert scheduler.queue_size() == 4
+        assert scheduler.view_next_event() is not None
+        assert scheduler.view_next_event().timestamp == 0.3
+        assert [
+            scheduler.remove_event().timestamp for _ in range(len(timestamps))
+        ] == [0.3, 1.2, 2.1, 2.8]
+        assert scheduler.is_empty()
+
+    def test_duplicate_timestamps_are_not_lost(self) -> None:
+        """Distinct events at the same timestamp remain in the queue."""
+        scheduler = EventScheduler()
+        scheduler.schedule(1.2, EventType.PACKET_ARRIVAL, packet_id=1)
+        scheduler.schedule(1.2, EventType.PACKET_ARRIVAL, packet_id=2)
+
+        assert scheduler.queue_size() == 2
+        assert [scheduler.remove_event().packet_id for _ in range(2)] == [1, 2]
+
+    def test_explicit_operations_handle_empty_queue(self) -> None:
+        """Empty queues report their state and reject removal cleanly."""
+        scheduler = EventScheduler()
+
+        assert scheduler.is_empty()
+        assert scheduler.queue_size() == 0
+        assert scheduler.view_next_event() is None
+        with pytest.raises(IndexError, match="No events scheduled"):
+            scheduler.remove_event()
+
 
 class TestEvent:
     """Tests for the core simulation event model."""
