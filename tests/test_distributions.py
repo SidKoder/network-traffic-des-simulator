@@ -137,3 +137,43 @@ class TestHomogeneousPoissonProcess:
         process = HomogeneousPoissonProcess(arrival_rate=1.0, rng=rng)
         with pytest.raises(ValueError):
             process.generate_arrival_times(start_time=10.0, end_time=5.0)
+
+    def test_invalid_arrival_rate(self) -> None:
+        """Non-positive arrival_rate is rejected."""
+        with pytest.raises(ValueError):
+            HomogeneousPoissonProcess(arrival_rate=0.0)
+        with pytest.raises(ValueError):
+            HomogeneousPoissonProcess(arrival_rate=-1.0)
+
+    def test_batched_inter_arrival_times(self, rng: np.random.Generator) -> None:
+        """Batched method returns n samples matching the exponential distribution."""
+        rate = 7.0
+        process = HomogeneousPoissonProcess(arrival_rate=rate, rng=rng)
+        samples = process.sample_inter_arrival_times(SAMPLE_SIZE)
+        assert_moments_close(samples, 1.0 / rate, 1.0 / (rate**2))
+
+        # Edge case: zero samples returns an empty array
+        assert process.sample_inter_arrival_times(0).shape == (0,)
+
+        # Edge case: negative n is rejected
+        with pytest.raises(ValueError):
+            process.sample_inter_arrival_times(-1)
+
+    def test_arrival_count_matches_expected(self, rng: np.random.Generator) -> None:
+        """Mean arrival count over many windows equals lambda * duration."""
+        rate = 10.0
+        duration = 100.0
+        n_windows = 200
+        process = HomogeneousPoissonProcess(arrival_rate=rate, rng=rng)
+
+        counts = np.array([
+            len(process.generate_arrival_times(0.0, duration))
+            for _ in range(n_windows)
+        ])
+        expected_count = rate * duration  # = 1000
+        # The sample mean of independent Poisson(1000) counts has
+        # std ~ sqrt(1000 / 200) ~ 2.24, so a 5% relative tolerance
+        # is ~22 standard errors — extremely loose, but guards
+        # against an order-of-magnitude regression in the vectorized
+        # implementation.
+        assert np.mean(counts) == pytest.approx(expected_count, rel=0.05)

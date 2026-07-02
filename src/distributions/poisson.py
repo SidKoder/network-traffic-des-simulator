@@ -16,9 +16,11 @@ class HomogeneousPoissonProcess:
         """Initialize a homogeneous Poisson process.
 
         Parameters:
-            arrival_rate: Arrival rate lambda (packets per unit time).
+            arrival_rate: Arrival rate lambda (packets per unit time). Must be > 0.
             rng: Optional NumPy random generator.
         """
+        if arrival_rate <= 0:
+            raise ValueError("arrival_rate must be positive")
         self._arrival_rate = arrival_rate
         self._inter_arrival = ExponentialDistribution(rate=arrival_rate, rng=rng)
 
@@ -39,6 +41,19 @@ class HomogeneousPoissonProcess:
         """
         return float(self._inter_arrival.sample(1)[0])
 
+    def sample_inter_arrival_times(self, n: int) -> np.ndarray:
+        """Draw n i.i.d. inter-arrival times in a single NumPy call.
+
+        Parameters:
+            n: Number of samples to draw (must be non-negative).
+
+        Returns:
+            Array of n inter-arrival times.
+        """
+        if n < 0:
+            raise ValueError("n must be non-negative")
+        return self._inter_arrival.sample(n)
+
     def generate_arrival_times(
         self,
         start_time: float,
@@ -56,16 +71,14 @@ class HomogeneousPoissonProcess:
         if end_time <= start_time:
             raise ValueError("end_time must be greater than start_time")
 
-        arrivals: list[float] = []
-        current = start_time
+        duration = end_time - start_time
+        rng = self._inter_arrival.rng
+        n_arrivals = int(rng.poisson(lam=self._arrival_rate * duration))
+        if n_arrivals == 0:
+            return []
 
-        while True:
-            current += self.sample_inter_arrival_time()
-            if current >= end_time:
-                break
-            arrivals.append(current)
-
-        return arrivals
+        uniforms = rng.uniform(0.0, 1.0, size=n_arrivals)
+        return (start_time + np.sort(uniforms) * duration).tolist()
 
     def expected_arrivals(self, duration: float) -> float:
         """Return expected number of arrivals over a duration.
