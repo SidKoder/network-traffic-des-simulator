@@ -37,6 +37,12 @@ class EventHandler(ABC):
     the scheduler. The default :class:`PrintEventHandler` simply logs the
     event to standard output — useful as a smoke test and as a
     reference for writing concrete handlers.
+
+    The optional :meth:`on_start` and :meth:`on_stop` lifecycle hooks
+    default to no-ops, so minimal handlers only need to implement
+    :meth:`handle`. The engine invokes these hooks via ``getattr``, so
+    duck-typed handlers (plain classes that expose ``handle``) work
+    just as well as subclasses of this ABC.
     """
 
     @abstractmethod
@@ -209,7 +215,10 @@ class EventLoop:
         if max_time is not None and max_time < 0:
             raise ValueError("max_time must be non-negative")
 
-        self._handler.on_start(self._clock.current_time)
+        on_start = getattr(self._handler, "on_start", None)
+        on_stop = getattr(self._handler, "on_stop", None)
+        if on_start is not None:
+            on_start(self._clock.current_time)
 
         while not self._scheduler.is_empty():
             if max_events is not None and self._processed >= max_events:
@@ -231,5 +240,6 @@ class EventLoop:
 
             self._processed += 1
 
-        self._handler.on_stop(self._clock.current_time)
+        if on_stop is not None:
+            on_stop(self._clock.current_time)
         return self._processed
