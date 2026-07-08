@@ -35,8 +35,8 @@ def _router(
     )
 
 
-def test_arrival_starts_service_immediately_when_server_is_idle() -> None:
-    """An accepted packet moves from queue to service when the CPU is idle."""
+def test_arrival_schedules_service_start_when_server_is_idle() -> None:
+    """An accepted packet schedules immediate service when the CPU is idle."""
     router = _router(service_time=2.5)
 
     packet = router.handle_arrival(current_time=10.0)
@@ -44,26 +44,33 @@ def test_arrival_starts_service_immediately_when_server_is_idle() -> None:
     assert packet.packet_id == 1
     assert packet.dropped is False
     assert router.queue_manager.is_empty is True
+    assert router.server.busy is False
+    assert packet.service_start_time is None
+
+    service_start = router.scheduler.next_event()
+    assert service_start.event_type == EventType.PACKET_SERVICE_START
+    assert service_start.timestamp == 10.0
+    assert service_start.packet_id == packet.packet_id
+
+    started = router.handle_event(service_start)
+    departure = router.scheduler.next_event()
+
+    assert started is packet
     assert router.server.busy is True
     assert router.server.current_packet is packet
     assert router.server.busy_start_time == 10.0
     assert packet.service_start_time == 10.0
-
-    service_start = router.scheduler.next_event()
-    departure = router.scheduler.next_event()
-
-    assert service_start.event_type == EventType.PACKET_SERVICE_START
-    assert service_start.timestamp == 10.0
-    assert service_start.packet_id == packet.packet_id
     assert departure.event_type == EventType.PACKET_DEPARTURE
     assert departure.timestamp == 12.5
     assert departure.packet_id == packet.packet_id
+    assert departure.metadata["service_time"] == 2.5
 
 
 def test_arrival_waits_in_queue_when_server_is_busy() -> None:
     """A packet accepted while CPU is busy remains buffered in router memory."""
     router = _router(capacity=2)
     first = router.handle_arrival(current_time=0.0)
+    router.handle_event(router.scheduler.next_event())
 
     second = router.handle_arrival(current_time=1.0)
 
@@ -72,7 +79,7 @@ def test_arrival_waits_in_queue_when_server_is_busy() -> None:
     assert router.queue_manager.size == 1
     assert router.queue_manager.peek() is second
     assert second.service_start_time is None
-    assert router.scheduler.pending_count == 2
+    assert router.scheduler.pending_count == 1
 
 
 def test_baseline_drop_happens_before_queue_capacity_check() -> None:
@@ -102,6 +109,7 @@ def test_queue_full_drop_happens_when_router_memory_is_full() -> None:
     router = _router(capacity=1, service_time=10.0)
 
     in_service = router.handle_arrival(current_time=0.0)
+    router.handle_event(router.scheduler.next_event())
     waiting = router.handle_arrival(current_time=0.1)
     dropped = router.handle_arrival(current_time=0.2)
 
@@ -125,29 +133,33 @@ def test_departure_finishes_current_packet_and_starts_next_waiting_packet() -> N
     """After service completion, the router immediately serves the next packet."""
     router = _router(capacity=2, service_time=5.0)
     first = router.handle_arrival(current_time=0.0)
+    router.handle_event(router.scheduler.next_event())
     second = router.handle_arrival(current_time=1.0)
 
-    service_start = router.scheduler.next_event()
     departure = router.scheduler.next_event()
-    assert service_start.event_type == EventType.PACKET_SERVICE_START
     assert departure.event_type == EventType.PACKET_DEPARTURE
 
     completed = router.handle_event(departure)
 
     assert completed is first
     assert first.departure_time == 5.0
+    assert router.queue_manager.is_empty is True
+
+    next_service_start = router.scheduler.next_event()
+    assert next_service_start.event_type == EventType.PACKET_SERVICE_START
+    assert next_service_start.packet_id == second.packet_id
+    assert next_service_start.timestamp == 5.0
+
+    router.handle_event(next_service_start)
+
+    next_departure = router.scheduler.next_event()
     assert router.server.busy is True
     assert router.server.current_packet is second
     assert router.server.busy_start_time == 5.0
     assert second.service_start_time == 5.0
-    assert router.queue_manager.is_empty is True
-
-    next_service_start = router.scheduler.next_event()
-    next_departure = router.scheduler.next_event()
     assert next_service_start.event_type == EventType.PACKET_SERVICE_START
     assert next_service_start.packet_id == second.packet_id
     assert next_service_start.timestamp == 5.0
     assert next_departure.event_type == EventType.PACKET_DEPARTURE
     assert next_departure.packet_id == second.packet_id
     assert next_departure.timestamp == 10.0
-

@@ -50,6 +50,7 @@ class Router:
         self._next_packet_id = first_packet_id
         self._packets_created = 0
         self._packets_dropped = 0
+        self._service_start_pending = False
 
     @property
     def packets_created(self) -> int:
@@ -72,6 +73,8 @@ class Router:
         """
         if event.event_type == EventType.PACKET_ARRIVAL:
             return self.handle_arrival(event.timestamp)
+        if event.event_type == EventType.PACKET_SERVICE_START:
+            return self.handle_service_start(event.timestamp, event.metadata)
         if event.event_type == EventType.PACKET_DEPARTURE:
             return self.handle_departure(event.timestamp)
         return None
@@ -99,9 +102,40 @@ class Router:
             self._drop_packet(packet, current_time, "queue_full")
             return packet
 
-        if not self.server.busy:
-            self._start_next_service(current_time)
+        if not self.server.busy and not self._service_start_pending:
+            self._schedule_service_start(current_time)
 
+        return packet
+
+    def handle_service_start(
+        self,
+        current_time: float,
+        metadata: dict[str, object] | None = None,
+    ) -> Packet:
+        """Start CPU service and schedule the packet departure.
+
+        Parameters:
+            current_time: Simulation time when service begins.
+            metadata: Event metadata containing the packet reserved for service.
+
+        Returns:
+            Packet whose service just started.
+        """
+        packet = self._packet_from_service_start_metadata(metadata)
+        self._service_start_pending = False
+        self.server.start_service(packet, current_time)
+
+        service_time = self._sample_service_time()
+        departure_time = current_time + service_time
+        self.scheduler.schedule(
+            departure_time,
+            EventType.PACKET_DEPARTURE,
+            packet_id=packet.packet_id,
+            metadata={
+                "packet": packet,
+                "service_time": service_time,
+            },
+        )
         return packet
 
     def handle_departure(self, current_time: float) -> Packet:
@@ -116,7 +150,7 @@ class Router:
         completed_packet = self.server.finish_service(departure_time=current_time)
 
         if not self.queue_manager.is_empty:
-            self._start_next_service(current_time)
+            self._schedule_service_start(current_time)
 
         return completed_packet
 
@@ -139,9 +173,12 @@ class Router:
             metadata={"packet": packet, "reason": reason},
         )
 
-    def _start_next_service(self, current_time: float) -> None:
+    def _schedule_service_start(self, current_time: float) -> None:
+        if self._service_start_pending:
+            return
+
         packet = self.queue_manager.dequeue()
-        self.server.start_service(packet, current_time)
+        self._service_start_pending = True
 
         self.scheduler.schedule(
             current_time,
@@ -150,17 +187,15 @@ class Router:
             metadata={"packet": packet},
         )
 
-        service_time = self._sample_service_time()
-        departure_time = current_time + service_time
-        self.scheduler.schedule(
-            departure_time,
-            EventType.PACKET_DEPARTURE,
-            packet_id=packet.packet_id,
-            metadata={
-                "packet": packet,
-                "service_time": service_time,
-            },
-        )
+    def _packet_from_service_start_metadata(
+        self,
+        metadata: dict[str, object] | None,
+    ) -> Packet:
+        if metadata is not None:
+            packet = metadata.get("packet")
+            if isinstance(packet, Packet):
+                return packet
+        return self.queue_manager.dequeue()
 
     def _sample_service_time(self) -> float:
         sample = self.service_time_distribution.sample(1)[0]
