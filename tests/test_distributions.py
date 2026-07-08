@@ -72,11 +72,22 @@ class TestBernoulliDistribution:
         assert_moments_close(samples, dist.mean(), dist.variance())
 
     def test_invalid_probability(self) -> None:
-        """Boundary probabilities are rejected."""
+        """Probabilities outside [0, 1] are rejected."""
         with pytest.raises(ValueError):
-            BernoulliDistribution(probability=0.0)
+            BernoulliDistribution(probability=-0.1)
         with pytest.raises(ValueError):
-            BernoulliDistribution(probability=1.0)
+            BernoulliDistribution(probability=1.1)
+
+    def test_boundary_probabilities_are_deterministic(
+        self,
+        rng: np.random.Generator,
+    ) -> None:
+        """Endpoint probabilities produce deterministic Bernoulli samples."""
+        never = BernoulliDistribution(probability=0.0, rng=rng)
+        always = BernoulliDistribution(probability=1.0, rng=rng)
+
+        assert np.array_equal(never.sample(20), np.zeros(20))
+        assert np.array_equal(always.sample(20), np.ones(20))
 
 
 class TestGeometricDistribution:

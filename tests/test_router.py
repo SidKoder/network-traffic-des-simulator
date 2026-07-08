@@ -20,11 +20,24 @@ class FixedServiceTime:
         return np.full(size, self.service_time)
 
 
+class FixedBernoulliRng:
+    """RNG test double that only supports Bernoulli binomial draws."""
+
+    def __init__(self, sample: int) -> None:
+        self.sample = sample
+        self.calls: list[tuple[int, float, int]] = []
+
+    def binomial(self, n: int, p: float, size: int) -> np.ndarray:
+        self.calls.append((n, p, size))
+        return np.full(size, self.sample)
+
+
 def _router(
     *,
     capacity: int | None = 2,
     service_time: float = 5.0,
     baseline_drop_probability: float = 0.0,
+    rng: np.random.Generator | FixedBernoulliRng | None = None,
 ) -> Router:
     return Router(
         queue_manager=QueueManager(QueueConfig(capacity=capacity)),
@@ -32,6 +45,7 @@ def _router(
         scheduler=EventScheduler(),
         service_time_distribution=FixedServiceTime(service_time),
         baseline_drop_probability=baseline_drop_probability,
+        rng=rng,
     )
 
 
@@ -102,6 +116,18 @@ def test_baseline_drop_happens_before_queue_capacity_check() -> None:
     assert drop_event.timestamp == 3.0
     assert drop_event.packet_id == packet.packet_id
     assert drop_event.metadata["reason"] == "baseline_drop"
+
+
+def test_baseline_drop_uses_bernoulli_sample() -> None:
+    """Baseline drop is driven by a Bernoulli draw from the configured RNG."""
+    rng = FixedBernoulliRng(sample=1)
+    router = _router(capacity=2, baseline_drop_probability=0.25, rng=rng)
+
+    packet = router.handle_arrival(current_time=1.5)
+
+    assert packet.dropped is True
+    assert packet.drop_reason == "baseline_drop"
+    assert rng.calls == [(1, 0.25, 1)]
 
 
 def test_queue_full_drop_happens_when_router_memory_is_full() -> None:

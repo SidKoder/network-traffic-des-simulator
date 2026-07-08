@@ -92,6 +92,10 @@ class QueueManager:
         """
         return self._total_dropped
 
+    def record_drop(self) -> None:
+        """Record a packet drop caused by finite queue capacity."""
+        self._total_dropped += 1
+
     def enqueue(self, packet: Packet) -> bool:
         """Attempt to add a packet to the queue.
 
@@ -105,7 +109,7 @@ class QueueManager:
             True if enqueued, False if dropped due to capacity.
         """
         if self.is_full:
-            self._total_dropped += 1
+            self.record_drop()
             return False
 
         if self._config.queue_discipline == QueueDiscipline.FIFO:

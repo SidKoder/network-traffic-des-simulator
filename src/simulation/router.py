@@ -3,6 +3,7 @@
 import numpy as np
 
 from distributions.base import Distribution
+from distributions.discrete import BernoulliDistribution
 from events.event import Event
 from events.scheduler import EventScheduler
 from events.types import EventType
@@ -47,6 +48,10 @@ class Router:
         self.service_time_distribution = service_time_distribution
         self.baseline_drop_probability = baseline_drop_probability
         self._rng = rng if rng is not None else np.random.default_rng()
+        self._baseline_drop_distribution = BernoulliDistribution(
+            probability=baseline_drop_probability,
+            rng=self._rng,
+        )
         self._next_packet_id = first_packet_id
         self._packets_created = 0
         self._packets_dropped = 0
@@ -96,6 +101,11 @@ class Router:
 
         if self._should_drop_baseline():
             self._drop_packet(packet, current_time, "baseline_drop")
+            return packet
+
+        if self._is_queue_in_overflow_state():
+            self.queue_manager.record_drop()
+            self._drop_packet(packet, current_time, "queue_full")
             return packet
 
         if not self.queue_manager.enqueue(packet):
@@ -165,7 +175,10 @@ class Router:
         return packet
 
     def _should_drop_baseline(self) -> bool:
-        return bool(self._rng.random() < self.baseline_drop_probability)
+        return bool(self._baseline_drop_distribution.sample(1)[0])
+
+    def _is_queue_in_overflow_state(self) -> bool:
+        return self.queue_manager.is_full
 
     def _drop_packet(self, packet: Packet, drop_time: float, reason: str) -> None:
         packet.mark_dropped(drop_time=drop_time, reason=reason)

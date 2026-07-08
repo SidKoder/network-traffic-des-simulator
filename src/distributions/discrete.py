@@ -12,11 +12,11 @@ class BernoulliDistribution(Distribution):
         """Initialize a Bernoulli distribution.
 
         Parameters:
-            probability: Success probability in (0, 1).
+            probability: Success probability in [0, 1].
             rng: Optional NumPy random generator.
         """
-        if not 0.0 < probability < 1.0:
-            raise ValueError("probability must be in (0, 1)")
+        if not 0.0 <= probability <= 1.0:
+            raise ValueError("probability must be in [0, 1]")
         super().__init__(rng)
         self._probability = probability
 
