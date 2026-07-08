@@ -139,7 +139,11 @@ class Router:
         return packet
 
     def handle_departure(self, current_time: float) -> Packet:
-        """Finish current service and start the next queued packet if present.
+        """Record departure, free the server, then inspect router memory.
+
+        Flow:
+            departure -> free server -> queue empty? -> stop or schedule next
+            packet service start at the same simulation time.
 
         Parameters:
             current_time: Simulation time of the departure.
@@ -149,7 +153,7 @@ class Router:
         """
         completed_packet = self.server.finish_service(departure_time=current_time)
 
-        if not self.queue_manager.is_empty:
+        if self._queue_has_waiting_packet():
             self._schedule_service_start(current_time)
 
         return completed_packet
@@ -187,15 +191,26 @@ class Router:
             metadata={"packet": packet},
         )
 
+    def _queue_has_waiting_packet(self) -> bool:
+        return self.queue_manager.size > 0
+
     def _packet_from_service_start_metadata(
         self,
         metadata: dict[str, object] | None,
     ) -> Packet:
-        if metadata is not None:
-            packet = metadata.get("packet")
-            if isinstance(packet, Packet):
-                return packet
-        return self.queue_manager.dequeue()
+        # The packet was dequeued at scheduling time and stashed in metadata.
+        # Always read it back from metadata; never dequeue here, otherwise
+        # we'd pop the *next* packet in line and service the wrong one.
+        if metadata is None:
+            raise ValueError(
+                "PACKET_SERVICE_START event arrived without metadata"
+            )
+        packet = metadata.get("packet")
+        if not isinstance(packet, Packet):
+            raise ValueError(
+                "PACKET_SERVICE_START event metadata is missing a Packet"
+            )
+        return packet
 
     def _sample_service_time(self) -> float:
         sample = self.service_time_distribution.sample(1)[0]

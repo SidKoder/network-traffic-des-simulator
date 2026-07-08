@@ -131,10 +131,13 @@ def test_queue_full_drop_happens_when_router_memory_is_full() -> None:
 
 def test_departure_finishes_current_packet_and_starts_next_waiting_packet() -> None:
     """After service completion, the router immediately serves the next packet."""
-    router = _router(capacity=2, service_time=5.0)
+    router = _router(capacity=1, service_time=5.0)
     first = router.handle_arrival(current_time=0.0)
     router.handle_event(router.scheduler.next_event())
     second = router.handle_arrival(current_time=1.0)
+
+    assert router.queue_manager.size == 1
+    assert router.queue_manager.is_full is True
 
     departure = router.scheduler.next_event()
     assert departure.event_type == EventType.PACKET_DEPARTURE
@@ -143,7 +146,12 @@ def test_departure_finishes_current_packet_and_starts_next_waiting_packet() -> N
 
     assert completed is first
     assert first.departure_time == 5.0
+    assert router.server.busy is False
+    assert router.server.current_packet is None
+    assert router.server.busy_start_time is None
     assert router.queue_manager.is_empty is True
+    assert router.queue_manager.size == 0
+    assert router.queue_manager.is_full is False
 
     next_service_start = router.scheduler.next_event()
     assert next_service_start.event_type == EventType.PACKET_SERVICE_START
@@ -163,3 +171,26 @@ def test_departure_finishes_current_packet_and_starts_next_waiting_packet() -> N
     assert next_departure.event_type == EventType.PACKET_DEPARTURE
     assert next_departure.packet_id == second.packet_id
     assert next_departure.timestamp == 10.0
+
+
+def test_departure_with_empty_queue_records_departure_and_stops() -> None:
+    """If no packet is waiting, departure only frees the server."""
+    router = _router(capacity=1, service_time=4.0)
+    packet = router.handle_arrival(current_time=2.0)
+    service_start = router.scheduler.next_event()
+    router.handle_event(service_start)
+
+    departure = router.scheduler.next_event()
+    assert departure.event_type == EventType.PACKET_DEPARTURE
+
+    completed = router.handle_event(departure)
+
+    assert completed is packet
+    assert packet.departure_time == 6.0
+    assert router.server.busy is False
+    assert router.server.current_packet is None
+    assert router.server.busy_start_time is None
+    assert router.queue_manager.is_empty is True
+    assert router.queue_manager.size == 0
+    assert router.queue_manager.is_full is False
+    assert router.scheduler.is_empty() is True
