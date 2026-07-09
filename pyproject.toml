@@ -27,4 +27,5 @@ markers = [
     "stress: stress tests that exercise the engine at scale (10k+ events)",
     "convergence: convergence experiments that verify simulator accuracy across increasing durations",
     "sweep: parameter sweeps that explore simulator performance under varying workload intensities",
+    "runner: validation of the research experiment runner framework",
 ]

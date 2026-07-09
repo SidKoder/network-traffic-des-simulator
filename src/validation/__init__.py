@@ -7,6 +7,7 @@ Public surface:
     - :mod:`validation.convergence_experiment`    — Monte Carlo convergence experiments
     - :mod:`validation.parameter_sweep`           — performance exploration under varying load
     - :mod:`validation.plots`                     — parameter sweep visualization layer
+    - :mod:`validation.experiment_runner`         — research experiment runner framework
 """
 
 from validation.theoretical_metrics import (
@@ -50,6 +51,11 @@ from validation.parameter_sweep import (
 from validation.plots import (
     plot_parameter_sweep,
 )
+from validation.experiment_runner import (
+    ExperimentType,
+    ExperimentConfig,
+    ExperimentRunner,
+)
 
 __all__ = [
     "DEFAULT_SAMPLE_SIZE",
@@ -76,6 +82,9 @@ __all__ = [
     "run_parameter_sweep",
     "format_parameter_sweep_report",
     "plot_parameter_sweep",
+    "ExperimentType",
+    "ExperimentConfig",
+    "ExperimentRunner",
     "sample_mean",
     "sample_variance",
     "theoretical_mean",

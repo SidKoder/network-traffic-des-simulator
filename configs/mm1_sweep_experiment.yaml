@@ -1,0 +1,8 @@
+# M/M/1 queue workload intensity parameter sweep config
+name: "mm1_sweep_experiment"
+type: "parameter_sweep"
+mu_rate: 10.0
+lambda_rates: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+capacity: null
+simulation_time: 10000.0
+seed: 12345
