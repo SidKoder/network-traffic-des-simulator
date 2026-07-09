@@ -25,4 +25,5 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 markers = [
     "stress: stress tests that exercise the engine at scale (10k+ events)",
+    "convergence: convergence experiments that verify simulator accuracy across increasing durations",
 ]
