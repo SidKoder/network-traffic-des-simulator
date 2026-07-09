@@ -30,6 +30,11 @@ def test_empty_records_return_zeroed_system_stats() -> None:
     assert stats.acceptance_rate == 0.0
     assert stats.completion_rate == 0.0
     assert stats.average_queue_length == 0.0
+    assert stats.server_busy_intervals == ()
+    assert stats.server_busy_time_closed == 0.0
+    assert stats.server_busy_time_observed_tail == 0.0
+    assert stats.server_utilization_closed_intervals == 0.0
+    assert stats.server_utilization_observed_tail == 0.0
 
 
 def test_basic_run_derives_throughput_and_ratios() -> None:
@@ -51,6 +56,15 @@ def test_basic_run_derives_throughput_and_ratios() -> None:
     assert stats.acceptance_rate == pytest.approx(1.0)
     assert stats.completion_rate == pytest.approx(1.0)
     assert stats.average_queue_length == pytest.approx(0.0)
+    assert stats.server_busy_time_closed == pytest.approx(2.0)
+    assert stats.server_busy_time_observed_tail == pytest.approx(2.0)
+    assert stats.server_utilization_closed_intervals == pytest.approx(1.0)
+    assert stats.server_utilization_observed_tail == pytest.approx(1.0)
+    assert len(stats.server_busy_intervals) == 1
+    assert stats.server_busy_intervals[0].start_time == pytest.approx(0.0)
+    assert stats.server_busy_intervals[0].end_time == pytest.approx(2.0)
+    assert stats.server_busy_intervals[0].duration == pytest.approx(2.0)
+    assert stats.server_busy_intervals[0].packet_id == 1
 
 
 def test_time_weighted_average_queue_length_is_correct() -> None:
@@ -133,3 +147,52 @@ def test_collector_wrapper_uses_same_computation() -> None:
     stats = compute_system_statistics_from_collector(collector)
     assert stats.total_departures == 1
     assert stats.success_rate_per_unit_time == pytest.approx(0.5)
+
+
+def test_open_tail_utilization_differs_from_closed_intervals() -> None:
+    # Packet starts service at t=0 and remains in service until observation end t=5.
+    # Closed busy time = 0 (no departure), observed-tail busy time = 5.
+    records = [
+        _r(0.0, MetricKind.ARRIVAL, 1),
+        _r(0.0, MetricKind.SERVICE_START, 1),
+        _r(5.0, MetricKind.ARRIVAL, 2),
+    ]
+
+    stats = compute_system_statistics(records)
+
+    assert stats.observation_duration == pytest.approx(5.0)
+    assert stats.server_busy_time_closed == pytest.approx(0.0)
+    assert stats.server_busy_time_observed_tail == pytest.approx(5.0)
+    assert stats.server_utilization_closed_intervals == pytest.approx(0.0)
+    assert stats.server_utilization_observed_tail == pytest.approx(1.0)
+    assert stats.server_busy_intervals == ()
+
+
+def test_server_busy_intervals_are_stored_for_theoretical_validation() -> None:
+    records = [
+        _r(0.0, MetricKind.ARRIVAL, 1),
+        _r(0.0, MetricKind.SERVICE_START, 1),
+        _r(3.0, MetricKind.DEPARTURE, 1),
+        _r(3.0, MetricKind.ARRIVAL, 2),
+        _r(3.0, MetricKind.SERVICE_START, 2),
+        _r(7.0, MetricKind.DEPARTURE, 2),
+    ]
+
+    stats = compute_system_statistics(records)
+
+    assert len(stats.server_busy_intervals) == 2
+    assert stats.server_busy_intervals[0].start_time == pytest.approx(0.0)
+    assert stats.server_busy_intervals[0].end_time == pytest.approx(3.0)
+    assert stats.server_busy_intervals[1].start_time == pytest.approx(3.0)
+    assert stats.server_busy_intervals[1].end_time == pytest.approx(7.0)
+    assert stats.server_busy_time_closed == pytest.approx(7.0)
+    assert stats.server_busy_time_observed_tail == pytest.approx(7.0)
+    assert stats.server_utilization_closed_intervals == pytest.approx(1.0)
+    assert stats.server_utilization_observed_tail == pytest.approx(1.0)
+
+
+def test_departure_without_active_service_raises() -> None:
+    records = [_r(1.0, MetricKind.DEPARTURE, 1)]
+
+    with pytest.raises(ValueError, match="departure without active service"):
+        compute_system_statistics(records)
