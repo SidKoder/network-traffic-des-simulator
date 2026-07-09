@@ -15,6 +15,7 @@ A production-grade **Discrete Event Simulation (DES)** engine for modeling netwo
 - **Distribution engine** — exponential, normal, gamma, Bernoulli, geometric, weighted discrete
 - **Configuration-driven** — no hardcoded simulation parameters
 - **Statistically validated** — unit tests verify sample moments against theory
+- **M/M/1 theoretical validation** — compare observed queue metrics to closed-form theory
 - **Stress tested** — 10,000-event end-to-end runs verify ordering, runtime, and absence of crashes
 
 ## Project Structure
