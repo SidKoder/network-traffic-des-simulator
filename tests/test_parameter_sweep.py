@@ -44,17 +44,19 @@ class TestParameterSweepCore:
             assert pt.throughput > 0.0
             assert pt.mean_delay > 0.0
             assert pt.drop_probability == 0.0  # Infinite capacity has no drops
+            assert 0.0 <= pt.server_utilization <= 1.0
 
-        # Verify increasing load properties (rho, queue length, delay)
+        # Verify increasing load properties (rho, queue length, delay, utilization)
         for i in range(len(result.points) - 1):
             pt_low = result.points[i]
             pt_high = result.points[i + 1]
 
-            # Throughput, queue length, and delay should grow with lambda
+            # Throughput, queue length, delay, and utilization should grow with lambda
             assert pt_high.throughput > pt_low.throughput
             assert pt_high.mean_queue_length > pt_low.mean_queue_length
             assert pt_high.mean_delay > pt_low.mean_delay
             assert pt_high.mean_system_length > pt_low.mean_system_length
+            assert pt_high.server_utilization > pt_low.server_utilization
 
     def test_parameter_sweep_finite_capacity_drops(self) -> None:
         """Verify finite M/M/1/K sweep tracks drops and handles lambda >= mu."""
@@ -76,6 +78,7 @@ class TestParameterSweepCore:
         pt_heavy = result.points[-1]
         assert pt_heavy.drop_probability > 0.20
         assert pt_heavy.throughput > 0.0
+        assert 0.0 <= pt_heavy.server_utilization <= 1.0
 
         # Verify drop probability increases with arrival rate
         for i in range(len(result.points) - 1):
@@ -103,6 +106,7 @@ class TestParameterSweepReport:
         assert "Mean Delay" in report
         assert "Drop Prob" in report
         assert "Mean QLen" in report
+        assert "Util" in report
 
         # Contains printed floats/metrics
         assert "2.000" in report
@@ -152,3 +156,30 @@ class TestParameterSweepInputValidation:
     def test_rejects_invalid_capacity(self) -> None:
         with pytest.raises(ValueError, match="capacity must be >= 1"):
             run_parameter_sweep(lambda_rates=[1.0], mu_rate=10.0, capacity=0)
+
+
+class TestParameterSweepVisualization:
+    """Verify that plotting functions generate graphs correctly."""
+
+    def test_plot_parameter_sweep_creates_images(self, tmpdir) -> None:
+        """Verify plotting creates target images and saves them."""
+        from validation.plots import plot_parameter_sweep
+
+        result = run_parameter_sweep(
+            lambda_rates=[2.0, 5.0],
+            mu_rate=10.0,
+            capacity=None,
+            simulation_time=200.0,
+            seed=42,
+        )
+
+        output_dir = str(tmpdir.mkdir("plots"))
+        saved_paths = plot_parameter_sweep(result, output_dir=output_dir)
+
+        assert len(saved_paths) == 3
+        for path in saved_paths:
+            import os
+            assert os.path.exists(path)
+            assert os.path.getsize(path) > 0
+            assert path.endswith(".png")
+

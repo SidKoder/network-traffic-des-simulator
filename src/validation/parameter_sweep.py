@@ -31,6 +31,7 @@ class SweepPoint:
     drop_probability: float
     mean_queue_length: float  # Lq (mean queue size)
     mean_system_length: float  # L (mean packets in system)
+    server_utilization: float
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,7 @@ def run_parameter_sweep(
                 drop_probability=stats.drop_probability,
                 mean_queue_length=observed.Lq,
                 mean_system_length=observed.L,
+                server_utilization=observed.utilization,
             )
         )
 
@@ -135,8 +137,8 @@ def format_parameter_sweep_report(result: ParameterSweepResult) -> str:
     lines = [
         f"Parameter Sweep (mu={result.mu_rate:.3f}, {cap_str})",
         "",
-        f"{'Lambda':>8}  {'Rho':>6}  {'Throughput':>10}  {'Mean Delay':>10}  {'Mean Wait':>9}  {'Drop Prob':>9}  {'Mean QLen':>9}  {'Mean SysLen':>11}",
-        "-" * 86,
+        f"{'Lambda':>8}  {'Rho':>6}  {'Throughput':>10}  {'Mean Delay':>10}  {'Mean Wait':>9}  {'Drop Prob':>9}  {'Mean QLen':>9}  {'Mean SysLen':>11}  {'Util':>6}",
+        "-" * 95,
     ]
 
     for pt in result.points:
@@ -148,7 +150,8 @@ def format_parameter_sweep_report(result: ParameterSweepResult) -> str:
             f"{pt.mean_wait:>9.4f}  "
             f"{pt.drop_probability:>9.4%}  "
             f"{pt.mean_queue_length:>9.4f}  "
-            f"{pt.mean_system_length:>11.4f}"
+            f"{pt.mean_system_length:>11.4f}  "
+            f"{pt.server_utilization:>6.2%}"
         )
 
     return "\n".join(lines)

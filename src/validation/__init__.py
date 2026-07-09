@@ -6,6 +6,7 @@ Public surface:
     - :mod:`validation.mm1_validation`            — M/M/1 theoretical vs observed validation
     - :mod:`validation.convergence_experiment`    — Monte Carlo convergence experiments
     - :mod:`validation.parameter_sweep`           — performance exploration under varying load
+    - :mod:`validation.plots`                     — parameter sweep visualization layer
 """
 
 from validation.theoretical_metrics import (
@@ -46,6 +47,9 @@ from validation.parameter_sweep import (
     run_parameter_sweep,
     format_parameter_sweep_report,
 )
+from validation.plots import (
+    plot_parameter_sweep,
+)
 
 __all__ = [
     "DEFAULT_SAMPLE_SIZE",
@@ -71,6 +75,7 @@ __all__ = [
     "ParameterSweepResult",
     "run_parameter_sweep",
     "format_parameter_sweep_report",
+    "plot_parameter_sweep",
     "sample_mean",
     "sample_variance",
     "theoretical_mean",
