@@ -2,6 +2,12 @@
 
 from dataclasses import dataclass, field
 
+from analytics.packet_statistics import (
+    calculate_service_time,
+    calculate_system_time,
+    calculate_waiting_time,
+)
+
 
 @dataclass
 class Packet:
@@ -34,9 +40,7 @@ class Packet:
         Returns:
             Waiting time, or None if service has not started.
         """
-        if self.service_start_time is None:
-            return None
-        return self.service_start_time - self.arrival_time
+        return calculate_waiting_time(self.arrival_time, self.service_start_time)
 
     @property
     def service_time(self) -> float | None:
@@ -45,9 +49,7 @@ class Packet:
         Returns:
             Service duration, or None if not yet completed.
         """
-        if self.service_start_time is None or self.departure_time is None:
-            return None
-        return self.departure_time - self.service_start_time
+        return calculate_service_time(self.service_start_time, self.departure_time)
 
     @property
     def system_time(self) -> float | None:
@@ -56,9 +58,7 @@ class Packet:
         Returns:
             Total system time, or None if not yet departed.
         """
-        if self.departure_time is None:
-            return None
-        return self.departure_time - self.arrival_time
+        return calculate_system_time(self.arrival_time, self.departure_time)
 
     def mark_dropped(self, drop_time: float, reason: str) -> None:
         """Record that this packet was dropped.
