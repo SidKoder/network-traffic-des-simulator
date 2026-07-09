@@ -27,7 +27,7 @@ src/
   simulation/     # Clock, generic event loop, event handler interface, packet model
   queueing/       # Queue manager (M/M/1, M/M/1/K)
   metrics/        # Performance metrics collection (future)
-  analytics/      # Statistical analysis helpers (packet-level latency stats)
+  analytics/      # Statistical analysis helpers (packet + system-level stats)
   utils/          # Shared utilities
 tests/            # pytest test suite (unit + stress)
 configs/          # Example YAML/JSON configuration files
