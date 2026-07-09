@@ -5,6 +5,7 @@ Public surface:
     - :mod:`validation.validation_runner`         — suite definition, runner, table printer
     - :mod:`validation.mm1_validation`            — M/M/1 theoretical vs observed validation
     - :mod:`validation.convergence_experiment`    — Monte Carlo convergence experiments
+    - :mod:`validation.parameter_sweep`           — performance exploration under varying load
 """
 
 from validation.theoretical_metrics import (
@@ -39,6 +40,12 @@ from validation.convergence_experiment import (
     run_convergence_experiment,
     format_convergence_report,
 )
+from validation.parameter_sweep import (
+    SweepPoint,
+    ParameterSweepResult,
+    run_parameter_sweep,
+    format_parameter_sweep_report,
+)
 
 __all__ = [
     "DEFAULT_SAMPLE_SIZE",
@@ -60,6 +67,10 @@ __all__ = [
     "ConvergenceResult",
     "run_convergence_experiment",
     "format_convergence_report",
+    "SweepPoint",
+    "ParameterSweepResult",
+    "run_parameter_sweep",
+    "format_parameter_sweep_report",
     "sample_mean",
     "sample_variance",
     "theoretical_mean",

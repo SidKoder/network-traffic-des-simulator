@@ -194,13 +194,14 @@ def _simulate_mm1_records(
     mu_rate: float,
     simulation_time: float,
     seed: int,
+    capacity: int | None = None,
 ) -> list[MetricRecord]:
     rng = np.random.default_rng(seed)
     arrival_process = HomogeneousPoissonProcess(arrival_rate=lambda_rate, rng=rng)
     service_distribution = ExponentialDistribution(rate=mu_rate, rng=rng)
 
     queue = QueueManager(
-        QueueConfig(capacity=None, queue_discipline=QueueDiscipline.FIFO)
+        QueueConfig(capacity=capacity, queue_discipline=QueueDiscipline.FIFO)
     )
     server = Server()
     scheduler = EventScheduler()
